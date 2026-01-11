@@ -13,3 +13,5 @@ Otree Sruvey with pop up, and then floating close button
 - keep people on the one page or let them move freely 
 
 Wikipedia scraper -> To fake Wiki-HTML pages 
+
+`python3 wiki_converter.py url output-name --offline`

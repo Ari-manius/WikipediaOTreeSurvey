@@ -6,7 +6,7 @@ SESSION_CONFIGS = [
      dict(
          name='shellproject',
          display_name='Shell Project',
-         app_sequence=['wiki_test'],
+         app_sequence=['wiki'],
          num_demo_participants=3,
      ),
 ]
