@@ -1,0 +1,160 @@
+{% extends "wiki/base.html" %}
+
+{% block page_content %}
+
+<div style="max-width: 900px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin-bottom: 20px;">
+        <h2>✓ Survey Complete</h2>
+        <p>Thank you for completing the survey. Below is a summary of your responses.</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+        <!-- Before Section -->
+        <div style="background: white; border: 1px solid #ddd; border-radius: 5px; padding: 20px;">
+            <h3 style="color: #0645ad; border-bottom: 2px solid #0645ad; padding-bottom: 10px;">BEFORE Reading</h3>
+
+            <div style="margin-bottom: 15px;">
+                <strong>Familiarity with topic:</strong>
+                <div style="margin-top: 5px; padding: 8px; background-color: #f5f5f5; border-radius: 3px;">
+                    {{ player.before_q1 }} / 5
+                </div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <strong>Confidence in knowledge:</strong>
+                <div style="margin-top: 5px; padding: 8px; background-color: #f5f5f5; border-radius: 3px;">
+                    {{ player.before_q2 }} / 5
+                </div>
+            </div>
+
+            <div style="margin-bottom: 0;">
+                <strong>What you knew:</strong>
+                <div style="margin-top: 5px; padding: 8px; background-color: #f5f5f5; border-radius: 3px; min-height: 60px; white-space: pre-wrap;">
+                    {{ player.before_q3 }}
+                </div>
+            </div>
+        </div>
+
+        <!-- After Section -->
+        <div style="background: white; border: 1px solid #ddd; border-radius: 5px; padding: 20px;">
+            <h3 style="color: #0645ad; border-bottom: 2px solid #0645ad; padding-bottom: 10px;">AFTER Reading</h3>
+
+            <div style="margin-bottom: 15px;">
+                <strong>Familiarity with topic:</strong>
+                <div style="margin-top: 5px; padding: 8px; background-color: #f5f5f5; border-radius: 3px;">
+                    {{ player.after_q1 }} / 5
+                </div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <strong>Confidence in knowledge:</strong>
+                <div style="margin-top: 5px; padding: 8px; background-color: #f5f5f5; border-radius: 3px;">
+                    {{ player.after_q2 }} / 5
+                </div>
+            </div>
+
+            <div style="margin-bottom: 0;">
+                <strong>What you now know:</strong>
+                <div style="margin-top: 5px; padding: 8px; background-color: #f5f5f5; border-radius: 3px; min-height: 60px; white-space: pre-wrap;">
+                    {{ player.after_q3 }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Article Evaluation Section -->
+    <div style="background: white; border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 30px;">
+        <h3 style="color: #0645ad; border-bottom: 2px solid #0645ad; padding-bottom: 10px;">Article Evaluation</h3>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <strong>Credibility (1-5):</strong>
+                <div style="margin-top: 8px; padding: 12px; background-color: #f5f5f5; border-radius: 3px; font-size: 18px; font-weight: bold;">
+                    {{ player.after_q4 }} / 5
+                </div>
+            </div>
+
+            <div>
+                <strong>Perspective Change:</strong>
+                <div style="margin-top: 8px; padding: 12px; background-color: #f5f5f5; border-radius: 3px;">
+                    {% if player.after_q5 == 1 %}
+                        Not at all
+                    {% elif player.after_q5 == 2 %}
+                        Slightly
+                    {% elif player.after_q5 == 3 %}
+                        Moderately
+                    {% elif player.after_q5 == 4 %}
+                        Significantly
+                    {% elif player.after_q5 == 5 %}
+                        Completely
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Summary -->
+    <div style="background: #fff3e0; border-left: 4px solid #ff9800; padding: 15px; border-radius: 3px; margin-bottom: 30px;">
+        <h3 style="margin-top: 0; color: #e65100;">Knowledge Change Summary</h3>
+        <ul style="margin: 10px 0; padding-left: 20px;">
+            <li>
+                Familiarity change:
+                <strong>
+                    {% if familiarity_change > 0 %}
+                        ↑ Increased by {{ familiarity_change_abs }}
+                    {% elif familiarity_change < 0 %}
+                        ↓ Decreased by {{ familiarity_change_abs }}
+                    {% else %}
+                        → No change
+                    {% endif %}
+                </strong>
+            </li>
+            <li>
+                Confidence change:
+                <strong>
+                    {% if confidence_change > 0 %}
+                        ↑ Increased by {{ confidence_change_abs }}
+                    {% elif confidence_change < 0 %}
+                        ↓ Decreased by {{ confidence_change_abs }}
+                    {% else %}
+                        → No change
+                    {% endif %}
+                </strong>
+            </li>
+        </ul>
+    </div>
+
+    <div style="text-align: center; padding-top: 20px;">
+        <p style="color: #666; font-size: 14px;">Thank you for participating in this study.</p>
+    </div>
+</div>
+
+<style>
+    h2 {
+        margin-top: 0;
+        color: #2e7d32;
+    }
+
+    h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+    }
+
+    ul {
+        line-height: 1.8;
+        color: #333;
+    }
+
+    strong {
+        color: #0645ad;
+        font-weight: bold;
+    }
+
+    div[style*="grid-template-columns"] {
+        align-items: start;
+    }
+</style>
+
+{% endblock %}
+
+

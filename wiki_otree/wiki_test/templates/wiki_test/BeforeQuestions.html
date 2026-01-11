@@ -1,0 +1,74 @@
+{% extends "wiki/base.html" %}
+
+{% block page_content %}
+
+<div style="max-width: 800px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #f5f5f5; border-left: 4px solid #0645ad; padding: 15px; margin-bottom: 20px;">
+        <h2>Before Reading</h2>
+        <p>Please answer the following questions about your prior knowledge before reading the article.</p>
+    </div>
+
+    <form method="post">
+        {{ formfields }}
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ccc;">
+            {{ next_button }}
+        </div>
+    </form>
+</div>
+
+<style>
+    form {
+        background: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .form-group {
+        margin-bottom: 25px;
+    }
+
+    label {
+        display: block;
+        margin-bottom: 10px;
+        font-weight: bold;
+        color: #333;
+    }
+
+    input[type="radio"] {
+        margin-right: 8px;
+    }
+
+    .radio-group {
+        display: flex;
+        gap: 15px;
+        margin-top: 10px;
+    }
+
+    textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        font-family: Arial, sans-serif;
+        min-height: 100px;
+        box-sizing: border-box;
+    }
+
+    button {
+        background-color: #0645ad;
+        color: white;
+        padding: 10px 30px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+
+    button:hover {
+        background-color: #0b3d91;
+    }
+</style>
+
+{% endblock %}

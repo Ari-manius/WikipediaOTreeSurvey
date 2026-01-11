@@ -1,0 +1,131 @@
+{% extends "wiki/base.html" %}
+
+{% block page_content %}
+
+<div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #f5f5f5; border-left: 4px solid #0645ad; padding: 15px; margin-bottom: 20px;">
+        <h2>Article Content</h2>
+        <p>Please read the article below carefully. You will be asked questions about it afterwards.</p>
+        <p style="font-size: 12px; color: #666; margin-top: 10px;">
+            <strong>Note:</strong> The article is displayed in a frame below. You can scroll to read the full content.
+        </p>
+    </div>
+
+    <div style="border: 1px solid #ddd; border-radius: 5px; overflow: hidden; background: white;">
+        <iframe
+            src="/static/wiki/{{ wiki_article_url }}"
+            style="width: 100%; height: 600px; border: none;"
+            title="Wikipedia Article"
+            sandbox="allow-same-origin allow-scripts"
+        ></iframe>
+    </div>
+
+    <div style="margin-top: 20px; padding: 15px; background-color: #fff9e6; border: 1px solid #ffd966; border-radius: 3px;">
+        <p style="margin: 0; font-size: 14px;">
+            <strong>ⓘ Important:</strong> Please take your time to read and understand the article content.
+            You will not be able to return to this page after clicking Next.
+        </p>
+    </div>
+
+    <form method="post" style="margin-top: 30px;">
+        <!-- Hidden fields for tracking metrics - populated by JavaScript -->
+        <input type="hidden" id="id_max_scroll_depth" name="max_scroll_depth" value="0">
+        <input type="hidden" id="id_tab_switches" name="tab_switches" value="0">
+        <input type="hidden" id="id_link_click_attempts" name="link_click_attempts" value="0">
+        <input type="hidden" id="id_reading_time_seconds" name="reading_time_seconds" value="0">
+
+        {{ next_button }}
+    </form>
+</div>
+
+<style>
+    form {
+        text-align: center;
+    }
+
+    button {
+        background-color: #0645ad;
+        color: white;
+        padding: 12px 40px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+
+    button:hover {
+        background-color: #0b3d91;
+    }
+
+    h2 {
+        margin-top: 0;
+        color: #202122;
+    }
+
+    p {
+        line-height: 1.6;
+        color: #444;
+    }
+</style>
+
+<script>
+    // Tracking behavior metrics
+    let trackingData = {
+        maxScrollDepth: 0,
+        tabSwitches: 0,
+        linkClickAttempts: 0,
+        startTime: Date.now()
+    };
+
+    // Track scroll depth in iframe
+    const iframe = document.querySelector('iframe');
+    if (iframe) {
+        iframe.addEventListener('load', function() {
+            try {
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+                // Track scroll within iframe
+                iframe.contentWindow.addEventListener('scroll', function() {
+                    const scrollHeight = iframeDoc.documentElement.scrollHeight;
+                    const clientHeight = iframe.contentWindow.innerHeight;
+                    const scrollTop = iframeDoc.documentElement.scrollTop || iframeDoc.body.scrollTop;
+                    const maxScroll = scrollHeight - clientHeight;
+                    const scrollPercentage = (scrollTop / maxScroll) * 100;
+
+                    if (scrollPercentage > trackingData.maxScrollDepth) {
+                        trackingData.maxScrollDepth = Math.round(scrollPercentage);
+                    }
+                });
+
+                // Track link click attempts
+                const links = iframeDoc.querySelectorAll('a');
+                links.forEach(link => {
+                    link.addEventListener('click', function(e) {
+                        trackingData.linkClickAttempts++;
+                    });
+                });
+            } catch (e) {
+                console.log('Cannot access iframe content (expected for cross-origin)');
+            }
+        });
+    }
+
+    // Track tab visibility changes (when user switches tabs)
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            trackingData.tabSwitches++;
+        }
+    });
+
+    // Update hidden fields and save data before form submission
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const readingTimeSeconds = Math.round((Date.now() - trackingData.startTime) / 1000);
+
+        document.getElementById('id_max_scroll_depth').value = trackingData.maxScrollDepth;
+        document.getElementById('id_tab_switches').value = trackingData.tabSwitches;
+        document.getElementById('id_link_click_attempts').value = trackingData.linkClickAttempts;
+        document.getElementById('id_reading_time_seconds').value = readingTimeSeconds;
+    });
+</script>
+
+{% endblock %}

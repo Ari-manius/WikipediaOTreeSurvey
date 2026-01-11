@@ -1,0 +1,47 @@
+# There must be two files specifing environmental variables: config.env and secrets.env. 
+# config.env is commited to the repo, secrets.env is ignored via .gitignore. Do not try 
+# to commit secrets.env. Credentials do not belong in a git repo. Create your own secrets.env.
+# secrets.env should contain POSTGRES_PASSWORD, OTREE_ADMIN_PASSWORD, and OTREE_REST_KEY.
+services:
+  otree:
+    build: .
+    ports:
+      - 8000:8000
+    environment:
+      - OTREE_PRODUCTION=1
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - config.env
+      - secrets.env
+    restart: always
+    logging:
+      options:
+        max-size: "1m"
+        max-file: "3"
+  db:
+    image: "postgres:16-alpine"
+    user: postgres
+    env_file:
+      - config.env
+      - secrets.env
+    environment:
+      - POSTGRES_DB=otree
+      - PG_DATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - db:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    logging:
+      options:
+        max-size: "1m"
+        max-file: "3"
+volumes:
+  db:
