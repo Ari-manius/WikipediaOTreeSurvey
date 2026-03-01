@@ -12,71 +12,84 @@ import requests
 import base64
 import re
 
-def download_resource(url):
+def download_resource(url, retries=2):
     """Download a resource and return as base64 or None if failed."""
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        return base64.b64encode(response.content).decode('utf-8')
-    except Exception as e:
-        print(f"  Warning: Could not download {url}: {e}")
-        return None
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
 
-def embed_offline_resources(html_content, body_content):
-    """Embed all external resources as base64 data URIs."""
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            return {
+                'data': base64.b64encode(response.content).decode('utf-8'),
+                'content_type': response.headers.get('content-type', 'application/octet-stream')
+            }
+        except requests.exceptions.Timeout:
+            if attempt < retries - 1:
+                print(f"  Warning: Timeout downloading {url[:60]}... (retry {attempt+1}/{retries-1})")
+            else:
+                print(f"  Warning: Could not download {url[:60]}... (timeout after {retries} attempts)")
+        except Exception as e:
+            print(f"  Warning: Could not download {url[:60]}...: {e}")
+            break
 
-    soup = BeautifulSoup(html_content, 'html.parser')
-    body_soup = BeautifulSoup(body_content, 'html.parser')
+    return None
 
-    print("  Downloading and embedding stylesheets...")
-    # Process stylesheets
-    for link in soup.find_all('link', {'rel': 'stylesheet'}):
-        if 'href' in link.attrs:
-            href = link.attrs['href']
-            print(f"    Downloading CSS: {href[:80]}...")
-            css_data = download_resource(href)
-            if css_data:
-                style = soup.new_tag('style')
-                # Decode base64 and add as CSS
-                try:
-                    css_content = base64.b64decode(css_data).decode('utf-8')
-                    style.string = css_content
-                    link.replace_with(style)
-                except Exception as e:
-                    print(f"    Error processing CSS: {e}")
-
+def embed_images_in_body(body):
+    """Embed all images in body as base64 data URIs."""
     print("  Downloading and embedding images...")
-    # Process images in body
-    for img in body_soup.find_all('img'):
+    image_count = 0
+
+    for img in body.find_all('img'):
         if 'src' in img.attrs:
             src = img.attrs['src']
-            print(f"    Downloading image: {src[:80]}...")
-            img_data = download_resource(src)
-            if img_data:
-                # Determine the media type from the URL
-                if src.endswith('.jpg') or src.endswith('.jpeg'):
-                    media_type = 'image/jpeg'
-                elif src.endswith('.png'):
-                    media_type = 'image/png'
-                elif src.endswith('.gif'):
-                    media_type = 'image/gif'
-                elif src.endswith('.svg'):
-                    media_type = 'image/svg+xml'
-                else:
-                    media_type = 'image/jpeg'  # Default
+            if src.startswith('data:'):
+                continue  # Skip already embedded images
 
-                img['src'] = f"data:{media_type};base64,{img_data}"
+            print(f"    Image: {src[:60]}...")
+            resource = download_resource(src)
+            if resource:
+                media_type = resource['content_type'].split(';')[0]
+                img['src'] = f"data:{media_type};base64,{resource['data']}"
+                image_count += 1
+                print(f"      ✓ Embedded")
+            else:
+                print(f"      ✗ Failed")
+
+    print(f"  Successfully embedded {image_count} images")
+
+
+def embed_css_and_fonts_in_head(head, soup):
+    """Embed CSS and fonts in head."""
+    print("  Downloading and embedding stylesheets...")
+
+    # Process stylesheets
+    for link in head.find_all('link', {'rel': 'stylesheet'}):
+        if 'href' in link.attrs:
+            href = link.attrs['href']
+            print(f"    CSS: {href[:60]}...")
+            resource = download_resource(href)
+            if resource:
+                style = soup.new_tag('style')
+                try:
+                    css_content = base64.b64decode(resource['data']).decode('utf-8')
+                    style.string = css_content
+                    link.replace_with(style)
+                    print(f"      ✓ Embedded")
+                except Exception as e:
+                    print(f"      ✗ Error: {e}")
 
     print("  Downloading and embedding fonts...")
-    # Process font URLs in stylesheets
-    for style in soup.find_all('style'):
+    font_count = 0
+
+    # Process fonts in style tags
+    for style in head.find_all('style'):
         if style.string:
             css_content = style.string
-            # Find all font URLs
             font_urls = re.findall(r'url\([\'"]?([^\'")]+\.[wot]f[f2]?)[\'"]?\)', css_content)
+
             for font_url in font_urls:
                 if not font_url.startswith('data:'):
                     full_url = font_url
@@ -85,29 +98,23 @@ def embed_offline_resources(html_content, body_content):
                     elif not font_url.startswith('http'):
                         full_url = urljoin('https://en.wikipedia.org', font_url)
 
-                    print(f"    Downloading font: {font_url[:80]}...")
-                    font_data = download_resource(full_url)
-                    if font_data:
-                        # Determine media type
-                        if font_url.endswith('.woff2'):
-                            media_type = 'font/woff2'
-                        elif font_url.endswith('.woff'):
-                            media_type = 'font/woff'
-                        elif font_url.endswith('.ttf'):
-                            media_type = 'font/ttf'
-                        elif font_url.endswith('.otf'):
-                            media_type = 'font/otf'
-                        else:
-                            media_type = 'font/woff'
-
-                        data_uri = f"data:{media_type};base64,{font_data}"
+                    print(f"    Font: {font_url[:60]}...")
+                    resource = download_resource(full_url)
+                    if resource:
+                        media_type = resource['content_type'].split(';')[0]
+                        data_uri = f"data:{media_type};base64,{resource['data']}"
                         css_content = css_content.replace(f"url('{font_url}')", f"url('{data_uri}')")
                         css_content = css_content.replace(f'url("{font_url}")', f'url("{data_uri}")')
                         css_content = css_content.replace(f"url({font_url})", f"url({data_uri})")
+                        font_count += 1
+                        print(f"      ✓ Embedded")
+                    else:
+                        print(f"      ✗ Failed")
 
             style.string = css_content
 
-    return str(soup), str(body_soup)
+    print(f"  Successfully embedded {font_count} fonts")
+
 
 def process_wikipedia_html(html_content, source_url, offline=False):
     """Process Wikipedia HTML and preserve original styling."""
@@ -202,13 +209,37 @@ def process_wikipedia_html(html_content, source_url, offline=False):
     for element in body.find_all('span', {'class': 'mw-editsection-bracket'}):
         element.decompose()
 
+    # Keep Wikipedia navigation elements but disable their links
+    # (We'll disable the links in the link processing section below)
+
     # Process links - block external/wikipedia links, keep internal ones
     for link in body.find_all('a', href=True):
         href = link['href']
 
+        # Check if this link is inside navigation/sidebar (portlet, mw-panel, etc.)
+        is_in_nav = False
+        parent = link.parent
+        while parent:
+            if parent.name in ['nav', 'aside']:
+                is_in_nav = True
+                break
+            if parent.get('id') in ['mw-panel', 'mw-sidebar', 'sidebar-toc']:
+                is_in_nav = True
+                break
+            if parent.get('class'):
+                classes = parent.get('class', [])
+                if any(c in classes for c in ['portlet', 'mw-portlet', 'navbox']):
+                    is_in_nav = True
+                    break
+            parent = parent.parent
+
         if href.startswith('#'):
             # Keep internal anchor links as-is
             pass
+        elif is_in_nav:
+            # Links in navigation areas are always disabled
+            link['onclick'] = "showBoundaryWarning('Navigation disabled in this study', 'blocked'); return false;"
+            del link['href']
         elif href.startswith('/wiki/'):
             # Wikipedia link - convert to onclick handler
             wiki_url = f"https://en.wikipedia.org{href}"
@@ -221,9 +252,40 @@ def process_wikipedia_html(html_content, source_url, offline=False):
             link['data-boundary-url'] = external_url
             link['onclick'] = f"showBoundaryWarning('{external_url}', 'external'); return false;"
             del link['href']
+        elif href.startswith('/'):
+            # Any other absolute path link (edit, history, etc.) - block it
+            link['onclick'] = "showBoundaryWarning('This action is disabled', 'blocked'); return false;"
+            del link['href']
         elif not href.startswith('http'):
             # Internal relative link - make absolute
             link['href'] = urljoin(source_url, href)
+
+    # Disable Wikipedia action links by text content (View history, Edit, View source, etc.)
+    action_keywords = ['history', 'edit', 'source', 'talk', 'view', 'watch', 'unwatch', 'delete', 'protect']
+    for link in body.find_all('a'):
+        link_text = link.get_text().lower().strip()
+
+        # Check if this link contains action keywords
+        if any(keyword in link_text for keyword in action_keywords):
+            link['onclick'] = "showBoundaryWarning('Navigation disabled in this study', 'blocked'); return false;"
+            if 'href' in link.attrs:
+                del link['href']
+        # Also check data attributes that might indicate navigation
+        elif link.get('data-title') or link.get('id'):
+            attrs_str = str(link.attrs).lower()
+            if any(keyword in attrs_str for keyword in action_keywords):
+                link['onclick'] = "showBoundaryWarning('Navigation disabled in this study', 'blocked'); return false;"
+                if 'href' in link.attrs:
+                    del link['href']
+
+    # Final safety: Remove any remaining links that still have href attributes pointing outside
+    for link in body.find_all('a', href=True):
+        href = link['href']
+        # If it's not an anchor link and we haven't handled it, disable it
+        if not href.startswith('#'):
+            link['onclick'] = "return false;"
+            if 'href' in link.attrs:
+                del link['href']
 
     # Process images
     for img in body.find_all('img'):
@@ -234,13 +296,18 @@ def process_wikipedia_html(html_content, source_url, offline=False):
             elif not src.startswith('http'):
                 img['src'] = urljoin(source_url, src)
 
-    # Get just the body content (without the body tag itself)
-    body_content = ''.join([str(child) for child in body.children])
-
-    # If offline mode, embed all resources
+    # If offline mode, embed all resources (do this BEFORE converting body to string)
     if offline:
         print("Converting to offline mode...")
-        head_content, body_content = embed_offline_resources(head_content, body_content)
+        # Embed images directly in the body BeautifulSoup object
+        embed_images_in_body(body)
+        # Embed CSS and fonts in head
+        embed_css_and_fonts_in_head(head, soup)
+        # Update head_content after embedding
+        head_content = str(head)
+
+    # Get just the body content (without the body tag itself)
+    body_content = ''.join([str(child) for child in body.children])
 
     return {
         'title': title_text,
@@ -412,9 +479,20 @@ def generate_html(data):
             }} else if (type === 'external') {{
                 document.querySelector('.boundary-modal h2').textContent = '⚠ EXTERNAL LINK WARNING ⚠';
                 document.querySelector('.boundary-modal p:first-of-type').textContent = 'You are attempting to access an external website outside this mirror.';
+            }} else if (type === 'blocked') {{
+                document.querySelector('.boundary-modal h2').textContent = '⛔ ACTION DISABLED ⛔';
+                document.querySelector('.boundary-modal p:first-of-type').textContent = 'This action has been disabled for this study. You can only read the article.';
+                document.querySelector('.modal-btn.danger').style.display = 'none';
+                document.getElementById('targetLink').style.display = 'none';
+            }} else {{
+                document.querySelector('.modal-btn.danger').style.display = 'block';
+                document.getElementById('targetLink').style.display = 'block';
+                document.getElementById('targetLink').textContent = url;
             }}
 
-            document.getElementById('targetLink').textContent = url;
+            if (type !== 'blocked') {{
+                document.getElementById('targetLink').textContent = url;
+            }}
             document.getElementById('boundaryModal').classList.add('active');
         }}
 

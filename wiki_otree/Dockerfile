@@ -13,5 +13,3 @@ RUN apk del build-base
 COPY ./ /app/
 # RUN echo "y" | otree resetdb
 CMD ["otree", "prodserver", "8000"]
-
-

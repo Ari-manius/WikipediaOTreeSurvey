@@ -1,11 +1,17 @@
-{% extends "global/base.html" %}
+{% load otree %}
 {% load static %}
-
-{% block title %}
-    Wiki Survey
-{% endblock %}
-
-{% block content %}
-    {% block page_content %}
-    {% endblock %}
-{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Wiki Survey{% endblock %}</title>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="container">
+        {% block page_content %}{% endblock %}
+    </div>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

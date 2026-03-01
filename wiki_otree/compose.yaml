@@ -1,5 +1,5 @@
-# There must be two files specifing environmental variables: config.env and secrets.env. 
-# config.env is commited to the repo, secrets.env is ignored via .gitignore. Do not try 
+# There must be two files specifing environmental variables: config.env and secrets.env.
+# config.env is commited to the repo, secrets.env is ignored via .gitignore. Do not try
 # to commit secrets.env. Credentials do not belong in a git repo. Create your own secrets.env.
 # secrets.env should contain POSTGRES_PASSWORD, OTREE_ADMIN_PASSWORD, and OTREE_REST_KEY.
 services:
@@ -15,6 +15,11 @@ services:
     env_file:
       - config.env
       - secrets.env
+    dns:
+      - 2001:7c0::53:4
+      - 2001:7c0::53:1
+    networks:
+      - otree_network
     restart: always
     logging:
       options:
@@ -33,6 +38,11 @@ services:
       - db:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    dns:
+      - 2001:7c0::53:4
+      - 2001:7c0::53:1
+    networks:
+      - otree_network
     healthcheck:
       test: ["CMD", "pg_isready" ]
       interval: 10s
@@ -45,3 +55,11 @@ services:
         max-file: "3"
 volumes:
   db:
+networks:
+  otree_network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1500
+    ipam:
+      config:
+        - subnet: fd00::/64

@@ -1,0 +1,42 @@
+{% extends "global/Page.html" %}
+{% load otree %}
+
+{% block app_scripts %}
+<script>
+    function initializeLanguage() {
+        var time = new Date();
+        time = time.toISOString();
+        var timeInput = document.getElementById("time");
+        if (timeInput) {
+            timeInput.value = time;
+        }
+
+        // German & English
+        var language = {{lang}};
+        console.log('Language value:', language, 'Type:', typeof language);
+        var german_text = document.getElementsByClassName("german");
+        var eng_text = document.getElementsByClassName("english");
+        console.log('German elements:', german_text.length, 'English elements:', eng_text.length);
+
+        if (language == 0) {
+            for(var i = 0; i < german_text.length; i++){
+                german_text[i].style.display = "block";}
+            for(var i = 0; i < eng_text.length; i++){
+                eng_text[i].style.display = "none";}
+        } else if (language == 1) {
+            for(var i = 0; i < german_text.length; i++){
+                german_text[i].style.display = "none";}
+            for(var i = 0; i < eng_text.length; i++){
+                eng_text[i].style.display = "block";}
+        }
+    }
+
+    // Run after DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeLanguage);
+    } else {
+        initializeLanguage();
+    }
+</script>
+
+{% endblock %}

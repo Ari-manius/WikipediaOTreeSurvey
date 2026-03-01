@@ -14,4 +14,9 @@ Otree Sruvey with pop up, and then floating close button
 
 Wikipedia scraper -> To fake Wiki-HTML pages 
 
-`python3 wiki_converter.py url output-name --offline`
+`python wiki_converter.py "https://en.wikipedia.org/wiki/Nanjing_massacre" --offline --output nanjing_massacre.html`
+
+***
+
+remove banner and other interactive extra stuff
+mutiple tabs error breaking survey - same session link 

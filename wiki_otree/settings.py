@@ -45,6 +45,8 @@ ADMIN_PASSWORD = os.environ.get("OTREE_ADMIN_PASSWORD")
 
 OTREE_AUTH_LEVEL = os.environ.get('OTREE_AUTH_LEVEL', None)
 
+ALLOWED_HOSTS = ['*.ma.bw-cloud-instance.org', 'ma.bw-cloud-instance.org', '[2001:7c0:2320:2:f816:3eff:fe72:54b3]']
+
 
 match os.environ.get("OTREE_REST_KEY"):
     case "" | None:
