@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Wikipedia Page Converter
-Converts Wikipedia HTML content to our fake Wikipedia format with boundary warnings.
+Converts Wikipedia HTML content to our fake Wikipedia format.
 """
 
 from bs4 import BeautifulSoup
@@ -11,9 +11,16 @@ from datetime import datetime
 import requests
 import base64
 import re
+import time
 
-def download_resource(url, retries=2):
-    """Download a resource and return as base64 or None if failed."""
+def download_resource(url, retries=4, delay=2.0):
+    """Download a resource and return as base64 or None if failed.
+    delay: seconds to wait before making the request (rate limiting).
+    Retries with exponential backoff on 429 (Too Many Requests).
+    """
+    if delay > 0:
+        time.sleep(delay)
+
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     }
@@ -21,6 +28,11 @@ def download_resource(url, retries=2):
     for attempt in range(retries):
         try:
             response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 429:
+                wait = int(response.headers.get('Retry-After', 2 ** (attempt + 1)))
+                print(f"      Rate limited (429). Waiting {wait}s... (attempt {attempt+1}/{retries})")
+                time.sleep(wait)
+                continue
             response.raise_for_status()
             return {
                 'data': base64.b64encode(response.content).decode('utf-8'),
@@ -31,6 +43,9 @@ def download_resource(url, retries=2):
                 print(f"  Warning: Timeout downloading {url[:60]}... (retry {attempt+1}/{retries-1})")
             else:
                 print(f"  Warning: Could not download {url[:60]}... (timeout after {retries} attempts)")
+        except requests.exceptions.HTTPError as e:
+            print(f"  Warning: Could not download {url[:60]}...: {e}")
+            break
         except Exception as e:
             print(f"  Warning: Could not download {url[:60]}...: {e}")
             break
@@ -201,6 +216,49 @@ def process_wikipedia_html(html_content, source_url, offline=False):
     for element in body.find_all('div', {'class': ['navbox', 'printfooter', 'mw-authority-control', 'noprint']}):
         element.decompose()
 
+    # Remove site notice / campaign banners (e.g. "Wiki Loves Ramadan")
+    for element in body.find_all('div', {'id': ['siteNotice', 'centralNotice', 'mw-siteNotice']}):
+        element.decompose()
+    for element in body.find_all('div', {'class': lambda c: c and any(x in c for x in ['siteNotice', 'centralNotice'])}):
+        element.decompose()
+
+    # Remove old revision banner ("This is an old revision of this page...")
+    for element in body.find_all('div', {'id': 'contentSub'}):
+        element.decompose()
+
+    # Remove banners, hatnotes, and maintenance boxes
+    for element in body.find_all('div', {'class': lambda c: c and any(x in c for x in ['ambox', 'mbox', 'ombox', 'tmbox', 'cmbox', 'fmbox', 'imbox'])}):
+        element.decompose()
+    for element in body.find_all('div', {'class': 'hatnote'}):
+        element.decompose()
+    for element in body.find_all('div', {'role': 'note'}):
+        element.decompose()
+    for element in body.find_all('table', {'class': lambda c: c and any(x in c for x in ['ambox', 'mbox', 'ombox', 'tmbox', 'cmbox', 'fmbox', 'imbox'])}):
+        element.decompose()
+
+    # Remove language selector/switcher
+    for element in body.find_all('div', {'class': lambda c: c and 'mw-portlet-lang' in c}):
+        element.decompose()
+    for element in body.find_all('button', {'class': lambda c: c and 'mw-interlanguage-selector' in c}):
+        element.decompose()
+    for element in body.find_all('div', {'class': lambda c: c and 'after-portlet-lang' in c}):
+        element.decompose()
+    for element in body.find_all('div', {'id': 'p-lang-btn'}):
+        element.decompose()
+
+    # Replace the footer with a research notice
+    for footer in body.find_all('footer', {'id': 'footer'}):
+        footer.clear()
+        footer['style'] = 'text-align: center; padding: 20px; border-top: 1px solid #ccc; margin-top: 30px; color: #666; font-size: 13px;'
+        footer.append(BeautifulSoup(
+            '<p>This article is created for research purposes only.</p>'
+            '<p>University of Konstanz</p>',
+            'html.parser'
+        ))
+    # Also remove the footer container wrapper styling if present
+    for container in body.find_all('div', {'class': 'mw-footer-container'}):
+        container['style'] = 'background: none; border: none;'
+
     # Remove "See also" and other navigation boxes
     for element in body.find_all('div', {'role': 'navigation'}):
         element.decompose()
@@ -209,83 +267,13 @@ def process_wikipedia_html(html_content, source_url, offline=False):
     for element in body.find_all('span', {'class': 'mw-editsection-bracket'}):
         element.decompose()
 
-    # Keep Wikipedia navigation elements but disable their links
-    # (We'll disable the links in the link processing section below)
-
-    # Process links - block external/wikipedia links, keep internal ones
+    # Disable all links except internal anchors — keep blue link styling
     for link in body.find_all('a', href=True):
         href = link['href']
-
-        # Check if this link is inside navigation/sidebar (portlet, mw-panel, etc.)
-        is_in_nav = False
-        parent = link.parent
-        while parent:
-            if parent.name in ['nav', 'aside']:
-                is_in_nav = True
-                break
-            if parent.get('id') in ['mw-panel', 'mw-sidebar', 'sidebar-toc']:
-                is_in_nav = True
-                break
-            if parent.get('class'):
-                classes = parent.get('class', [])
-                if any(c in classes for c in ['portlet', 'mw-portlet', 'navbox']):
-                    is_in_nav = True
-                    break
-            parent = parent.parent
-
         if href.startswith('#'):
-            # Keep internal anchor links as-is
-            pass
-        elif is_in_nav:
-            # Links in navigation areas are always disabled
-            link['onclick'] = "showBoundaryWarning('Navigation disabled in this study', 'blocked'); return false;"
-            del link['href']
-        elif href.startswith('/wiki/'):
-            # Wikipedia link - convert to onclick handler
-            wiki_url = f"https://en.wikipedia.org{href}"
-            link['data-boundary-url'] = wiki_url
-            link['onclick'] = f"showBoundaryWarning('{wiki_url}', 'wikipedia'); return false;"
-            del link['href']
-        elif href.startswith('http://') or href.startswith('https://') or href.startswith('//'):
-            # External link - convert to onclick handler
-            external_url = href if href.startswith('http') else f"https:{href}"
-            link['data-boundary-url'] = external_url
-            link['onclick'] = f"showBoundaryWarning('{external_url}', 'external'); return false;"
-            del link['href']
-        elif href.startswith('/'):
-            # Any other absolute path link (edit, history, etc.) - block it
-            link['onclick'] = "showBoundaryWarning('This action is disabled', 'blocked'); return false;"
-            del link['href']
-        elif not href.startswith('http'):
-            # Internal relative link - make absolute
-            link['href'] = urljoin(source_url, href)
-
-    # Disable Wikipedia action links by text content (View history, Edit, View source, etc.)
-    action_keywords = ['history', 'edit', 'source', 'talk', 'view', 'watch', 'unwatch', 'delete', 'protect']
-    for link in body.find_all('a'):
-        link_text = link.get_text().lower().strip()
-
-        # Check if this link contains action keywords
-        if any(keyword in link_text for keyword in action_keywords):
-            link['onclick'] = "showBoundaryWarning('Navigation disabled in this study', 'blocked'); return false;"
-            if 'href' in link.attrs:
-                del link['href']
-        # Also check data attributes that might indicate navigation
-        elif link.get('data-title') or link.get('id'):
-            attrs_str = str(link.attrs).lower()
-            if any(keyword in attrs_str for keyword in action_keywords):
-                link['onclick'] = "showBoundaryWarning('Navigation disabled in this study', 'blocked'); return false;"
-                if 'href' in link.attrs:
-                    del link['href']
-
-    # Final safety: Remove any remaining links that still have href attributes pointing outside
-    for link in body.find_all('a', href=True):
-        href = link['href']
-        # If it's not an anchor link and we haven't handled it, disable it
-        if not href.startswith('#'):
-            link['onclick'] = "return false;"
-            if 'href' in link.attrs:
-                del link['href']
+            pass  # Keep anchor links
+        else:
+            link['href'] = 'javascript:void(0)'
 
     # Process images
     for img in body.find_all('img'):
@@ -319,234 +307,11 @@ def process_wikipedia_html(html_content, source_url, offline=False):
 def generate_html(data):
     """Generate the complete HTML page using Wikipedia's original styling."""
 
-    # Boundary warning CSS to inject into head
-    boundary_css = '''    <style>
-    /* Boundary Modal */
-    .modal-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.85);
-        backdrop-filter: blur(5px);
-        z-index: 9999;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .modal-overlay.active {
-        display: flex;
-    }
-
-    .boundary-modal {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border: 2px solid #00ff41;
-        border-radius: 3px;
-        padding: 30px;
-        max-width: 500px;
-        box-shadow: 0 0 40px rgba(0, 255, 65, 0.3), inset 0 0 20px rgba(0, 255, 65, 0.1);
-        color: #00ff41;
-        font-family: 'Courier New', monospace;
-        animation: glitch 0.3s ease-in-out;
-    }
-
-    @keyframes glitch {
-        0%, 100% { transform: translate(0); }
-        20% { transform: translate(-2px, 2px); }
-        40% { transform: translate(-2px, -2px); }
-        60% { transform: translate(2px, 2px); }
-        80% { transform: translate(2px, -2px); }
-    }
-
-    .boundary-modal h2 {
-        color: #00ff41;
-        font-size: 24px;
-        margin: 0 0 20px 0;
-        text-align: center;
-        border: none;
-        font-family: 'Courier New', monospace;
-        text-shadow: 0 0 10px rgba(0, 255, 65, 0.7);
-        letter-spacing: 2px;
-    }
-
-    .boundary-modal p {
-        color: #00ff41;
-        font-size: 14px;
-        line-height: 1.8;
-        margin-bottom: 20px;
-        text-align: left;
-    }
-
-    .boundary-modal .warning {
-        background: rgba(255, 0, 0, 0.1);
-        border-left: 3px solid #ff0040;
-        padding: 10px;
-        margin: 15px 0;
-        color: #ff0040;
-        font-size: 13px;
-    }
-
-    .boundary-modal .link-display {
-        background: rgba(0, 0, 0, 0.5);
-        border: 1px solid #00ff41;
-        padding: 10px;
-        margin: 15px 0;
-        word-break: break-all;
-        font-size: 12px;
-        color: #0ff;
-    }
-
-    .modal-buttons {
-        display: flex;
-        gap: 15px;
-        justify-content: center;
-        margin-top: 25px;
-    }
-
-    .modal-btn {
-        padding: 10px 25px;
-        border: 2px solid #00ff41;
-        background: transparent;
-        color: #00ff41;
-        cursor: pointer;
-        font-family: 'Courier New', monospace;
-        font-size: 14px;
-        font-weight: bold;
-        transition: all 0.3s;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
-    .modal-btn:hover {
-        background: #00ff41;
-        color: #1a1a2e;
-        box-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
-    }
-
-    .modal-btn.danger {
-        border-color: #ff0040;
-        color: #ff0040;
-    }
-
-    .modal-btn.danger:hover {
-        background: #ff0040;
-        color: #fff;
-        box-shadow: 0 0 20px rgba(255, 0, 64, 0.5);
-    }
-
-    .blink {
-        animation: blink 1s infinite;
-    }
-
-    @keyframes blink {
-        0%, 49% { opacity: 1; }
-        50%, 100% { opacity: 0; }
-    }
-    </style>
-'''
-
-    # Boundary modal HTML
-    boundary_modal = '''
-    <!-- Boundary Warning Modal -->
-    <div class="modal-overlay" id="boundaryModal">
-        <div class="boundary-modal">
-            <h2>⚠ REALITY BOUNDARY DETECTED ⚠</h2>
-            <p>You are attempting to exit this mirror and access <strong>another Wikipedia page</strong>.</p>
-            <div class="warning">
-                <span class="blink">▶</span> WARNING: Crossing between wiki-spaces may cause temporal displacement.
-            </div>
-            <p>Target destination:</p>
-            <div class="link-display" id="targetLink"></div>
-            <p style="font-size: 12px; color: #0ff;">This page contains references to other Wikipedia articles. Proceeding will navigate away from the current mirror.</p>
-            <div class="modal-buttons">
-                <button class="modal-btn" onclick="closeModal()">STAY HERE</button>
-                <button class="modal-btn danger" onclick="proceedToLink()">TRAVERSE BOUNDARY</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let pendingUrl = null;
-
-        function showBoundaryWarning(url, type) {{
-            pendingUrl = url;
-
-            if (type === 'wikipedia') {{
-                document.querySelector('.boundary-modal h2').textContent = '⚠ REALITY BOUNDARY DETECTED ⚠';
-                document.querySelector('.boundary-modal p:first-of-type').textContent = 'You are attempting to exit this mirror and access another Wikipedia page.';
-            }} else if (type === 'external') {{
-                document.querySelector('.boundary-modal h2').textContent = '⚠ EXTERNAL LINK WARNING ⚠';
-                document.querySelector('.boundary-modal p:first-of-type').textContent = 'You are attempting to access an external website outside this mirror.';
-            }} else if (type === 'blocked') {{
-                document.querySelector('.boundary-modal h2').textContent = '⛔ ACTION DISABLED ⛔';
-                document.querySelector('.boundary-modal p:first-of-type').textContent = 'This action has been disabled for this study. You can only read the article.';
-                document.querySelector('.modal-btn.danger').style.display = 'none';
-                document.getElementById('targetLink').style.display = 'none';
-            }} else {{
-                document.querySelector('.modal-btn.danger').style.display = 'block';
-                document.getElementById('targetLink').style.display = 'block';
-                document.getElementById('targetLink').textContent = url;
-            }}
-
-            if (type !== 'blocked') {{
-                document.getElementById('targetLink').textContent = url;
-            }}
-            document.getElementById('boundaryModal').classList.add('active');
-        }}
-
-        function closeModal() {{
-            document.getElementById('boundaryModal').classList.remove('active');
-            pendingUrl = null;
-        }}
-
-        function proceedToLink() {{
-            if (pendingUrl) {{
-                window.open(pendingUrl, '_blank');
-                closeModal();
-            }}
-        }}
-
-        // Handle hash links
-        document.addEventListener('click', function(e) {{
-            const link = e.target.closest('a[href^="#"]');
-            if (link) {{
-                e.preventDefault();
-                const target = link.getAttribute('href');
-                if (target && target !== '#') {{
-                    const element = document.querySelector(target);
-                    if (element) {{
-                        element.scrollIntoView({{ behavior: 'smooth' }});
-                    }}
-                }}
-            }}
-        }});
-
-        // Close modal on escape key
-        document.addEventListener('keydown', function(e) {{
-            if (e.key === 'Escape') {{
-                closeModal();
-            }}
-        }});
-
-        // Close modal on overlay click
-        document.getElementById('boundaryModal').addEventListener('click', function(e) {{
-            if (e.target === this) {{
-                closeModal();
-            }}
-        }});
-    </script>
-'''
-
-    # Inject boundary CSS into the original head
-    head_with_css = data['head_content'].replace('</head>', f'{boundary_css}</head>')
-
     html = f'''<!DOCTYPE html>
 <html lang="en">
-{head_with_css}
+{data['head_content']}
 <body>
-{data['body_content']}{boundary_modal}</body>
+{data['body_content']}</body>
 </html>
 '''
 

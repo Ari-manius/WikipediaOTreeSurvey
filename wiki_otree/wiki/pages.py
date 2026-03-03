@@ -16,12 +16,12 @@ class WikipediaDisplay(Page):
 
     def vars_for_template(self):
         articles = {
-            0: 'nanjing_massacre.html',
-            1: 'nanjing_massacre.html',  # Can change to different article
-            2: 'nanjing_massacre.html',
+            0: 'nanjing_massacre_en.html',
+            1: 'nanjing_massacre_jp.html',  
+            2: 'nanjing_massacre_old.html',
         }
         return dict(
-            wiki_article_url=articles.get(self.player.group_assignment, 'nanjing_massacre.html')
+            wiki_article_url=articles.get(self.player.group_assignment, 'nanjing_massacre_en.html') # fallback
         )
 
 

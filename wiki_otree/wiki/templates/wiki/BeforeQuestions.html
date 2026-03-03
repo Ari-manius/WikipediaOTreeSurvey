@@ -1,74 +1,45 @@
-{% extends "wiki/base.html" %}
+{{ block title }}Before Reading{{ endblock }}
 
-{% block page_content %}
+{{ block styles }}
+<style>
+    .container { max-width: 800px; margin: 0 auto; }
+    .header { background-color: #f5f5f5; border-left: 4px solid #0645ad; padding: 15px; margin-bottom: 20px; }
+    .header h2 { margin-top: 0; color: #202122; }
+    .header p { line-height: 1.6; color: #444; }
 
-<div style="max-width: 800px; margin: 0 auto; padding: 20px;">
-    <div style="background-color: #f5f5f5; border-left: 4px solid #0645ad; padding: 15px; margin-bottom: 20px;">
+    form { background: white; padding: 20px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+    .form-group { margin-bottom: 25px; }
+    .form-group > label { display: block; margin-bottom: 10px; font-weight: bold; color: #333; }
+
+    .form-group .controls { display: flex; gap: 15px; flex-wrap: wrap; margin-top: 5px; }
+    .form-group .controls label { font-weight: normal; color: #444; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+    input[type="radio"] { margin: 0; }
+
+    textarea, input[type="text"] {
+        width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 3px;
+        font-family: Arial, sans-serif; min-height: 100px; box-sizing: border-box;
+    }
+
+    .field-error, .form-group .help-block { color: #d32f2f; font-size: 13px; margin-top: 4px; }
+
+    .submit-row { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ccc; text-align: center; }
+    button { background-color: #0645ad; color: white; padding: 10px 30px; border: none; border-radius: 3px; cursor: pointer; font-size: 16px; }
+    button:hover { background-color: #0b3d91; }
+</style>
+{{ endblock }}
+
+{{ block content }}
+<div class="container">
+    <div class="header">
         <h2>Before Reading</h2>
         <p>Please answer the following questions about your prior knowledge before reading the article.</p>
     </div>
 
-    <form method="post">
-        {{ formfields }}
+    {{ formfields }}
 
-        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ccc;">
-            {{ next_button }}
-        </div>
-    </form>
+    <div class="submit-row">
+        {{ next_button }}
+    </div>
 </div>
-
-<style>
-    form {
-        background: white;
-        padding: 20px;
-        border-radius: 5px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-
-    .form-group {
-        margin-bottom: 25px;
-    }
-
-    label {
-        display: block;
-        margin-bottom: 10px;
-        font-weight: bold;
-        color: #333;
-    }
-
-    input[type="radio"] {
-        margin-right: 8px;
-    }
-
-    .radio-group {
-        display: flex;
-        gap: 15px;
-        margin-top: 10px;
-    }
-
-    textarea {
-        width: 100%;
-        padding: 10px;
-        border: 1px solid #ccc;
-        border-radius: 3px;
-        font-family: Arial, sans-serif;
-        min-height: 100px;
-        box-sizing: border-box;
-    }
-
-    button {
-        background-color: #0645ad;
-        color: white;
-        padding: 10px 30px;
-        border: none;
-        border-radius: 3px;
-        cursor: pointer;
-        font-size: 16px;
-    }
-
-    button:hover {
-        background-color: #0b3d91;
-    }
-</style>
-
-{% endblock %}
+{{ endblock }}
