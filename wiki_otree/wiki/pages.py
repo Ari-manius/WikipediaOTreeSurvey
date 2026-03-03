@@ -32,18 +32,8 @@ class AfterQuestions(Page):
 
 
 class Results(Page):
-    """Show comparison of before/after responses"""
-
-    def vars_for_template(self):
-        familiarity_change = self.player.after_q1 - self.player.before_q1
-        confidence_change = self.player.after_q2 - self.player.before_q2
-
-        return dict(
-            familiarity_change=familiarity_change,
-            familiarity_change_abs=abs(familiarity_change),
-            confidence_change=confidence_change,
-            confidence_change_abs=abs(confidence_change),
-        )
+    """Thank you page"""
+    pass
 
 
 page_sequence = [BeforeQuestions, WikipediaDisplay, AfterQuestions, Results]
